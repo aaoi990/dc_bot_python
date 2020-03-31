@@ -8,17 +8,28 @@ import itertools
 import collections
 import logging
 from datetime import datetime, timedelta
+import mysql.connector
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
 class Bot:
-    def __init__(self, file, keywords):
+    def __init__(self, keywords):
         self.api = create_api()
-        self.file = file
+        self.cnx = mysql.connector.connect(
+            user= os.getenv('DBUSER'),
+            password=os.getenv("DATABASE_PASSWORD"),
+            database= os.getenv('DATABASE'),
+            host= os.getenv('DBHOST'))
+        self.cursor = self.cnx.cursor()
         self.keywords = keywords
         self.stop_words = stopwords.words('english') 
         self._since = self.read_since_id()
+
+    def __del__(self):
+        self.cursor.close()
+        self.cnx.close()
 
     @property
     def since(self):
@@ -32,13 +43,25 @@ class Bot:
     def since(self):
         del self._since
 
+    def init_db(self):
+        self.cnx = mysql.connector.connect(
+            user= os.getenv('DBUSER'),
+            password=os.getenv("DATABASE_PASSWORD"),
+            database= os.getenv('DATABASE'),
+            host= os.getenv('DBHOST')
+        )
+        return self.cnx.cursor()
+
     def read_since_id(self):
-        with open(self.file) as f:
-            return int(f.read())
+        query = "SELECT since_id FROM since ORDER BY dtoi DESC LIMIT 1"
+        self.cursor.execute(query)
+        result_set = self.cursor.fetchall()
+        return result_set[0][0]
 
     def write_since_id(self):
-        with open(self.file, 'w') as f:
-            f.write(str(self._since))
+        self.cursor.execute("""INSERT INTO since (since_id, dtoi) 
+            VALUES(%s, now()) ON DUPLICATE KEY UPDATE dtoi=now()""" % self.since)
+        self.cnx.commit()
 
     def check_mentions(self):
         logger.info("Checking mentions since: %s" % self.since)
@@ -59,7 +82,7 @@ class Bot:
                 except:
                     pass
 
-            self.compose_overview_reply(user, tweet)
+                self.compose_overview_reply(user, tweet)
 
         return new_since_id
 
@@ -114,7 +137,6 @@ class Bot:
     def get_average_tweets(self, days, status):
         average = (days / status)
         return round(average, 2)
-
 
     def compose_overview_reply(self, user, tweet):
         logger.info("Answering to %s with overview tweet" % tweet.user.name)
