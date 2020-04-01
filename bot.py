@@ -90,7 +90,8 @@ class Bot:
         return " ".join(re.sub("([^0-9A-Za-z \t])|(\w+:\/\/\S+)", "", txt).split())
 
     def examine_tweets(self, user):
-        tweets = self.api.user_timeline(user['screen_name'],count=2000)
+        tweets = self.api.user_timeline(user['screen_name'],count=200)
+        print('count...........', len(tweets))
         all_tweets = [tweet.text for tweet in tweets]
         all_tweets_parse_url = [self.remove_url(tweet) for tweet in all_tweets]
         words_in_tweet = [tweet.lower().split() for tweet in all_tweets_parse_url]
